@@ -1,0 +1,98 @@
+# ==========================
+# Backend
+# ==========================
+backend:
+  # >>> HIER deine Registry/Tags eintragen
+  image: "ghcr.io/<deine-org>/<dein-backend>:1.0.0"
+  imagePullPolicy: IfNotPresent
+  replicas: 2
+
+  # Container lauscht intern auf 3001 (Express/FastAPI/Spring via 3001)
+  containerPort: 3001
+  # Service wird im Cluster auf Port 80 exponiert und mapped auf containerPort
+  servicePort: 80
+
+  # DB-URL wie im bestehenden Schema (Service-Name: database)
+  env:
+    - name: DATABASE_URL
+      value: "postgresql://todouser:todopass@database:5432/todoapp"
+
+  # Prometheus Scrape (optional)
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "3001"
+
+# ==========================
+# Frontend
+# ==========================
+frontend:
+  # >>> HIER deine Registry/Tags eintragen
+  image: "ghcr.io/<deine-org>/<dein-frontend>:1.0.0"
+  imagePullPolicy: IfNotPresent
+  replicas: 2
+
+  # Falls du ein statisches Build über nginx servest (empfohlen): 80
+  # (Wenn dein FE ein Dev-Server auf 3000 ist, stelle hier 3000 ein.)
+  containerPort: 80
+  servicePort: 80
+
+  # Ganz wichtig: Der Browser sieht den K8s-Service-Namen "backend" NICHT.
+  # Nutze eine relative URL auf den Ingress (/api), dann funktioniert es auch extern.
+  env:
+    - name: REACT_APP_API_URL
+      value: "/api"
+
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "80"
+
+# ==========================
+# Datenbank (einfach & flüchtig)
+# ==========================
+database:
+  # Für die Abgabe reicht ein Standard-Image
+  image: "postgres:16-alpine"
+  imagePullPolicy: IfNotPresent
+  replicas: 1
+  containerPort: 5432
+  servicePort: 5432
+  env:
+    - name: POSTGRES_USER
+      value: "todouser"
+    - name: POSTGRES_PASSWORD
+      value: "todopass"
+    - name: POSTGRES_DB
+      value: "todoapp"
+    - name: POSTGRES_LISTEN_ADDRESSES
+      value: "*"
+
+# ==========================
+# Ingress (NGINX)
+# ==========================
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # Falls dein Backend KEIN /api-Präfix braucht, ent-kommentiere die nächste Zeile,
+    # damit /api/foo -> /foo an den Backend-Service umgeschrieben wird.
+    # nginx.ingress.kubernetes.io/rewrite-target: "/$2"
+  hosts:
+    - host: ""  # catch-all
+      paths:
+        # /api/**/* -> backend (Service-Port 80, mapped auf containerPort 3001)
+        - path: /api(/|$)(.*)
+          pathType: Prefix
+          backend:
+            service:
+              name: backend
+              port:
+                number: 80
+        # alles andere -> frontend
+        - path: /(.*)
+          pathType: Prefix
+          backend:
+            service:
+              name: frontend
+              port:
+                number: 80

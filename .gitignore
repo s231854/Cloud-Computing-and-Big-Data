@@ -1,0 +1,40 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+terraform/terraform.tfvars
+
+# Ansible
+*.retry
+ansible/inventory/inventory.ini
+
+# SSH/Secrets
+*.pem
+*.pub
+id_rsa
+id_ed25519
+corne_key
+PE_Key
+.env
+*.key
+*.crt
+
+# Node/React
+node_modules/
+dist/
+build/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+
+# Kube
+k3s.yaml
+*.kubeconfig
+
+# OS/IDE
+.DS_Store
+.idea/
+.vscode/
