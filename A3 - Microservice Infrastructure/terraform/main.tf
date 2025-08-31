@@ -41,7 +41,7 @@ resource "random_id" "cluster_id" {
 
 # Kubernetes server
 resource "openstack_compute_instance_v2" "k3s_server" {
-  name = "k3s-${random_id.cluster_id.hex}-server"
+  name = "k3scorn-${random_id.cluster_id.hex}-server"
   image_id    = "f445d5f0-e9a6-4e09-b3c4-7e6607aea9fb"
   flavor_name = "mb1.large"
   key_pair    = "corne_key"
@@ -54,7 +54,7 @@ resource "openstack_compute_instance_v2" "k3s_server" {
 # Kubernetes Worker Nodes
 resource "openstack_compute_instance_v2" "k3s_worker" {
   count       = 2
-  name  = "k3s-${random_id.cluster_id.hex}-agent-${count.index + 1}"
+  name  = "k3scorn-${random_id.cluster_id.hex}-agent-${count.index + 1}"
   image_id    = "f445d5f0-e9a6-4e09-b3c4-7e6607aea9fb"
   flavor_name = "mb1.large"
   key_pair    = "corne_key"

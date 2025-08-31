@@ -2,12 +2,6 @@
 docker_packages:
   - docker.io
 
-# Container Images
-# ghcr_images:
-#   backend: "ghcr.io/timfbr03/cloud-computing-dski/backend:latest"
-#   frontend: "ghcr.io/timfbr03/cloud-computing-dski/frontend:latest"
-#   database: "ghcr.io/timfbr03/cloud-computing-dski/database:latest"
-
 # Helm Konfiguration für Microservices
 helm_chart_path: "/opt/helm/microservices"
 helm_release_name: "microservices"
