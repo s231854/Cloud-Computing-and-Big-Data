@@ -1,0 +1,28 @@
+- name: Verify Streamlit App
+  hosts: app
+  become: yes
+  gather_facts: no
+
+  vars:
+    app_name: app
+    app_port: 8080
+
+  tasks:
+    - name: Dienst muss laufen
+      ansible.builtin.command: systemctl is-active {{ app_name }}
+      register: svc
+      changed_when: false
+      failed_when: svc.rc != 0
+
+    - name: Warten bis Port lauscht
+      ansible.builtin.wait_for:
+        host: "127.0.0.1"
+        port: "{{ app_port }}"
+        state: started
+        timeout: 60
+
+    - name: HTTP-Check (localhost)
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ app_port }}/"
+        return_content: no
+        status_code: 200,302,303,307,308

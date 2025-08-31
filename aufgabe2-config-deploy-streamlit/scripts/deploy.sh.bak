@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+VER="${1:-v1.0.0}"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+pushd "$ROOT/terraform" >/dev/null
+APP_IP="$(terraform output -raw app_ip 2>/dev/null || true)"
+popd >/dev/null
+
+if [ -z "${APP_IP:-}" ]; then
+  echo "⚠️  Konnte app_ip nicht aus Terraform lesen. IP als 2. Parameter angeben."
+  APP_IP="${2:-}"
+  [ -z "${APP_IP}" ] && { echo "Fehlende IP"; exit 1; }
+fi
+
+INV_DIR="$ROOT/ansible/inventory"
+mkdir -p "$INV_DIR"
+cat > "$INV_DIR/inventory.ini" <<EOF
+[app]
+$APP_IP ansible_user=ubuntu
+
+[app:vars]
+ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+EOF
+
+pushd "$ROOT/ansible" >/dev/null
+APP_VERSION="$VER" ansible-playbook -i inventory/inventory.ini deploy.yaml
+APP_VERSION="$VER" ansible-playbook -i inventory/inventory.ini verify.yaml
+popd >/dev/null
+
+echo "✅ Deploy abgeschlossen: Version $VER unter http://$APP_IP:8080/"

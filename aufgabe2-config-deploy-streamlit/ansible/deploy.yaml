@@ -1,0 +1,134 @@
+- name: Deploy Flask App vX.Y.Z
+  hosts: app
+  become: yes
+  gather_facts: yes
+
+  vars:
+    app_name: app
+    app_user: ubuntu
+    app_dir: /opt/streamlit-app
+    app_port: 8080
+    app_entry: app.py
+    app_version: "{{ lookup('env','APP_VERSION') | default('v1.0.0', true) }}"
+    app_src: "{{ playbook_dir }}/../app/{{ app_version }}"
+
+  pre_tasks:
+    - name: APT-Cache aktualisieren (Debian/Ubuntu)
+      when: ansible_facts['os_family'] == 'Debian'
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Universe-Repo aktivieren (nur Ubuntu)
+      when: ansible_facts['distribution'] == 'Ubuntu'
+      ansible.builtin.shell: |
+        set -e
+        if ! grep -Rqs "^[^#].*{{ ansible_distribution_release }}.*universe" /etc/apt/sources.list /etc/apt/sources.list.d; then
+          apt-get update -y
+          apt-get install -y software-properties-common
+          add-apt-repository -y universe
+          apt-get update -y
+        fi
+      args:
+        executable: /bin/bash
+
+  tasks:
+    - name: Basis-Pakete installieren (Debian/Ubuntu)
+      when: ansible_facts['os_family'] == 'Debian'
+      ansible.builtin.apt:
+        name:
+          - python3
+          - python3-venv
+          - python3-pip
+          - git
+        state: present
+        update_cache: yes
+
+    - name: App-Verzeichnis anlegen
+      ansible.builtin.file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: "0755"
+
+    - name: Prüfe, ob lokaler App-Code existiert
+      delegate_to: localhost
+      become: false
+      ansible.builtin.stat:
+        path: "{{ app_src }}"
+      register: stat_app_src
+
+    - name: App-Code kopieren (Controller -> Ziel)
+      when: stat_app_src.stat.exists
+      ansible.builtin.copy:
+        src: "{{ app_src }}/"
+        dest: "{{ app_dir }}/"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: "0644"
+        directory_mode: "0755"
+
+    - name: Python venv erstellen (falls nicht vorhanden)
+      ansible.builtin.command: python3 -m venv .venv
+      args:
+        chdir: "{{ app_dir }}"
+        creates: "{{ app_dir }}/.venv/bin/python3"
+
+    - name: Prüfe, ob requirements.txt vorhanden ist
+      ansible.builtin.stat:
+        path: "{{ app_dir }}/requirements.txt"
+      register: stat_requirements
+
+    - name: Abhängigkeiten aus requirements.txt installieren
+      when: stat_requirements.stat.exists
+      ansible.builtin.pip:
+        requirements: "{{ app_dir }}/requirements.txt"
+        virtualenv: "{{ app_dir }}/.venv"
+        virtualenv_command: "python3 -m venv"
+
+    - name: Streamlit installieren (Fallback, falls kein requirements.txt)
+      when: not stat_requirements.stat.exists
+      ansible.builtin.pip:
+        name: streamlit
+        state: present
+        virtualenv: "{{ app_dir }}/.venv"
+        virtualenv_command: "python3 -m venv"
+
+    - name: systemd Unit schreiben
+      ansible.builtin.copy:
+        dest: "/etc/systemd/system/{{ app_name }}.service"
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Streamlit App
+          After=network.target
+
+          [Service]
+          Type=simple
+          User={{ app_user }}
+          WorkingDirectory={{ app_dir }}
+          Environment=APP_VERSION={{ app_version }}
+          ExecStart={{ app_dir }}/.venv/bin/streamlit run {{ app_entry }} --server.port={{ app_port }} --server.headless=true --server.address=0.0.0.0
+          Restart=always
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+      notify: Restart app
+
+    - name: systemd neu laden
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+    - name: Dienst aktivieren + starten
+      ansible.builtin.systemd:
+        name: "{{ app_name }}"
+        enabled: yes
+        state: started
+
+  handlers:
+    - name: Restart app
+      ansible.builtin.systemd:
+        name: "{{ app_name }}"
+        state: restarted
