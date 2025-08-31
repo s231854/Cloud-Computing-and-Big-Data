@@ -2,27 +2,24 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: todo-ingress
-  namespace: microservices
-  annotations:
-    {{- range $key, $value := .Values.ingress.annotations }}
-    {{ $key }}: {{ $value | quote }}
-    {{- end }}
+  name: {{ include "app.fullname" . }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
 spec:
-  ingressClassName: {{ .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className | default "nginx" }}
   rules:
-    {{- range .Values.ingress.hosts }}
+  {{- range .Values.ingress.hosts }}
     - host: {{ .host | quote }}
       http:
         paths:
-          {{- range .paths }}
-          - path: {{ .path }}
-            pathType: {{ .pathType }}
+        {{- range .paths }}
+          - path: {{ .path | default "/" }}
+            pathType: {{ .pathType | default "Prefix" }}
             backend:
               service:
-                name: {{ .backend.service.name }}
+                name: {{ include "app.fullname" $ }}-frontend
                 port:
-                  number: {{ .backend.service.port.number }}
-          {{- end }}
-    {{- end }}
+                  number: {{ $.Values.frontend.servicePort | default 80 }}
+        {{- end }}
+  {{- end }}
 {{- end }}
